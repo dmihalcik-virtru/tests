@@ -1,4 +1,5 @@
 import json
+import pathlib
 import assertions as tdfassertions
 import base64
 from collections.abc import Callable
@@ -151,7 +152,7 @@ def update_manifest(
     return outfile
 
 
-def validate_manifest_schema(tdf_file: str):
+def validate_manifest_schema(tdf_file: str) -> None:
     ## Unzip the tdf
     tmp_dir = os.path.dirname(tdf_file)
     fname = os.path.basename(tdf_file).split(".")[0]
@@ -177,20 +178,20 @@ def validate_manifest_schema(tdf_file: str):
 
 
 def encrypt(
-    sdk,
-    pt_file,
-    ct_file,
-    mime_type="application/octet-stream",
-    fmt="nano",
+    sdk: sdk_type,
+    pt_file: pathlib.Path,
+    ct_file: pathlib.Path,
+    mime_type: str ="application/octet-stream",
+    fmt: str="nano",
     attr_values: list[str] | None = None,
-    assert_value="",
-    use_ecdsa_binding=False,
-):
-    c = [
+    assert_value: str="",
+    use_ecdsa_binding: bool=False,
+) -> None:
+    c: list[str] = [
         sdk_paths[sdk],
         "encrypt",
-        pt_file,
-        ct_file,
+        str(pt_file),
+        str(ct_file),
         fmt,
         mime_type,
     ]
@@ -213,17 +214,17 @@ def encrypt(
 
 
 def decrypt(
-    sdk,
-    ct_file,
-    rt_file,
-    fmt="nano",
+    sdk: sdk_type,
+    ct_file: pathlib.Path,
+    rt_file: pathlib.Path,
+    fmt:str="nano",
     assert_keys: str = "",
-):
+) -> None:
     c = [
         sdk_paths[sdk],
         "decrypt",
-        ct_file,
-        rt_file,
+        str(ct_file),
+        str(rt_file),
         fmt,
     ]
     if assert_keys:

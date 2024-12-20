@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal
+from typing import Any, Literal
 
 
 Type = Literal["handling", "other"]
@@ -10,8 +10,8 @@ BindingMethod = Literal["jws", "JWS"]
 
 class Statement(BaseModel):
     format: str
-    schema: str
-    value: dict | str
+    schema: str # type: ignore # Schema is reserved in pydantic, but is the name in the spec. Use the Field to fix if needed.
+    value: dict[str, Any] | str
 
 
 class Binding(BaseModel):

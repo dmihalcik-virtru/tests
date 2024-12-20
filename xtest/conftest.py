@@ -1,21 +1,28 @@
+import base64
+import json
 import os
+import pathlib
 import pytest
 import random
-import string
-import base64
 import secrets
-import assertions
-import json
-
-from pydantic_core import to_jsonable_python
+import string
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
+from pydantic_core import to_jsonable_python
+from typing import Any, Literal
 
 import abac
+import assertions
 
 
-def pytest_addoption(parser):
+FileSize = Literal["small", "large"]
+
+
+def pytest_addoption(parser: pytest.Parser):
+    def split_string(s: str) -> list[str]:
+        return s.split()
+
     parser.addoption(
         "--large",
         action="store_true",
@@ -24,12 +31,29 @@ def pytest_addoption(parser):
     parser.addoption(
         "--sdks", help="select which sdks to run by default, unless overridden"
     )
-    parser.addoption("--sdks-decrypt", help="select which sdks to run for decrypt only")
-    parser.addoption("--sdks-encrypt", help="select which sdks to run for encrypt only")
-    parser.addoption("--containers", help="which container formats to test")
+    parser.addoption(
+        "--sdks-decrypt",
+        type=split_string,
+        help="select which sdks to run for decrypt only",
+    )
+    parser.addoption(
+        "--sdks-encrypt",
+        type=split_string,
+        help="select which sdks to run for encrypt only",
+    )
+    parser.addoption(
+        "--containers",
+        type=split_string,
+        help="which container formats to test",
+    )
+
+# function that takes a type of Any that we know is a list[str] and returns a type of list[str]
+# This is useful for type checking in the pytest_generate_tests function
+def is_list(val: Any) -> list[str]:
+    return val
 
 
-def pytest_generate_tests(metafunc):
+def pytest_generate_tests(metafunc: pytest.Metafunc):
     if "size" in metafunc.fixturenames:
         metafunc.parametrize(
             "size",
@@ -37,32 +61,29 @@ def pytest_generate_tests(metafunc):
             scope="session",
         )
     if "encrypt_sdk" in metafunc.fixturenames:
+        encrypt_sdks: list[str] = ["js", "go", "java"]
         if metafunc.config.getoption("--sdks-encrypt"):
-            encrypt_sdks = metafunc.config.getoption("--sdks-encrypt").split()
+            encrypt_sdks = is_list(metafunc.config.getoption("--sdks-encrypt"))
         elif metafunc.config.getoption("--sdks"):
-            encrypt_sdks = metafunc.config.getoption("--sdks").split()
-        else:
-            encrypt_sdks = ["js", "go", "java"]
+            encrypt_sdks = is_list(metafunc.config.getoption("--sdks"))
         metafunc.parametrize("encrypt_sdk", encrypt_sdks)
     if "decrypt_sdk" in metafunc.fixturenames:
+        decrypt_sdks = ["js", "go", "java"]
         if metafunc.config.getoption("--sdks-decrypt"):
-            decrypt_sdks = metafunc.config.getoption("--sdks-decrypt").split()
+            decrypt_sdks = is_list(metafunc.config.getoption("--sdks-decrypt"))
         elif metafunc.config.getoption("--sdks"):
-            decrypt_sdks = metafunc.config.getoption("--sdks").split()
-        else:
-            decrypt_sdks = ["js", "go", "java"]
+            decrypt_sdks = is_list(metafunc.config.getoption("--sdks"))
         metafunc.parametrize("decrypt_sdk", decrypt_sdks)
     if "container" in metafunc.fixturenames:
+        containers = ["nano", "ztdf", "nano-with-ecdsa"]
         if metafunc.config.getoption("--containers"):
-            containers = metafunc.config.getoption("--containers").split()
-        else:
-            containers = ["nano", "ztdf", "nano-with-ecdsa"]
+            containers = is_list(metafunc.config.getoption("--containers"))
         metafunc.parametrize("container", containers)
 
 
 @pytest.fixture(scope="module")
-def pt_file(tmp_dir, size):
-    pt_file = f"{tmp_dir}test-plain-{size}.txt"
+def pt_file(tmp_dir: os.PathLike[str], size: FileSize) -> os.PathLike[str]:
+    pt_file = pathlib.Path(tmp_dir, f"test-plain-{size}.txt")
     length = (5 * 2**30) if size == "large" else 128
     with open(pt_file, "w") as f:
         for i in range(0, length, 16):
@@ -71,27 +92,27 @@ def pt_file(tmp_dir, size):
 
 
 @pytest.fixture(scope="module")
-def tmp_dir():
+def tmp_dir() -> os.PathLike[str]:
     dname = "tmp/"
     if not os.path.exists(dname):
         os.makedirs(dname)
-    return dname
+    return pathlib.Path(dname)
 
 
 _otdfctl = abac.OpentdfCommandLineTool()
 
 
 @pytest.fixture(scope="module")
-def otdfctl():
+def otdfctl() -> abac.OpentdfCommandLineTool:
     return _otdfctl
 
 
 @pytest.fixture(scope="module")
-def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool):
+def temporary_namespace(otdfctl: abac.OpentdfCommandLineTool) -> abac.Namespace:
     return create_temp_namesapce(otdfctl)
 
 
-def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool):
+def create_temp_namesapce(otdfctl: abac.OpentdfCommandLineTool) -> abac.Namespace:
     # Create a new attribute in a random namespace
     random_ns = "".join(random.choices(string.ascii_lowercase, k=8)) + ".com"
     ns = otdfctl.namespace_create(random_ns)
@@ -127,27 +148,27 @@ def load_cached_kas_keys() -> abac.PublicKey:
 
 
 @pytest.fixture(scope="session")
-def kas_url_default():
+def kas_url_default() -> str:
     return os.getenv("KASURL", "http://localhost:8080/kas")
 
 
 @pytest.fixture(scope="session")
-def kas_url_value1():
+def kas_url_value1() -> str:
     return os.getenv("KASURL1", "http://localhost:8181/kas")
 
 
 @pytest.fixture(scope="session")
-def kas_url_value2():
+def kas_url_value2() -> str:
     return os.getenv("KASURL2", "http://localhost:8282/kas")
 
 
 @pytest.fixture(scope="session")
-def kas_url_attr():
+def kas_url_attr() -> str:
     return os.getenv("KASURL3", "http://localhost:8383/kas")
 
 
 @pytest.fixture(scope="session")
-def kas_url_ns():
+def kas_url_ns() -> str:
     return os.getenv("KASURL4", "http://localhost:8484/kas")
 
 
@@ -156,7 +177,7 @@ def attribute_single_kas_grant(
     otdfctl: abac.OpentdfCommandLineTool,
     kas_url_value1: str,
     temporary_namespace: abac.Namespace,
-):
+) -> abac.Attribute:
     anyof = otdfctl.attribute_create(
         temporary_namespace, "letter", abac.AttributeRule.ANY_OF, ["a"]
     )
@@ -670,7 +691,7 @@ def assertion_file_no_keys():
 
 
 @pytest.fixture(scope="module")
-def assertion_file_rs_and_hs_keys(hs256_key, rs256_keys):
+def assertion_file_rs_and_hs_keys(hs256_key: str, rs256_keys: tuple[str, str]) -> str:
     rs256_private, _ = rs256_keys
     assertion_list = [
         assertions.Assertion(
@@ -709,7 +730,7 @@ def assertion_file_rs_and_hs_keys(hs256_key, rs256_keys):
 
 def write_assertion_verification_keys_to_file(
     file_name: str,
-    assertion_verificaiton_keys: assertions.AssertionVerificationKeys = None,
+    assertion_verificaiton_keys: assertions.AssertionVerificationKeys,
 ):
     as_file = f"{tmp_dir}test-assertion-verification-{file_name}.json"
     assertion_verification_json = json.dumps(
@@ -721,7 +742,7 @@ def write_assertion_verification_keys_to_file(
 
 
 @pytest.fixture(scope="module")
-def assertion_verification_file_rs_and_hs_keys(hs256_key, rs256_keys):
+def assertion_verification_file_rs_and_hs_keys(hs256_key: str, rs256_keys: tuple[str, str]) -> str:
     _, rs256_public = rs256_keys
     assertion_verification = assertions.AssertionVerificationKeys(
         keys={
