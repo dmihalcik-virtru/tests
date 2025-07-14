@@ -2,6 +2,7 @@ import filecmp
 import logging
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -11,9 +12,19 @@ from abac import Attribute
 
 cipherTexts: dict[str, Path] = {}
 
+# Improved logging configuration
 logger = logging.getLogger("xtest")
-logging.basicConfig()
-logging.getLogger().setLevel(logging.DEBUG)
+# Configure logging to ensure we see everything
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=sys.stdout,  # Ensure output goes to stdout for pytest capture
+)
+# Make sure our logger is set to DEBUG level
+logger.setLevel(logging.DEBUG)
+
+# Configure subprocess logging if needed
+logging.getLogger("subprocess").setLevel(logging.DEBUG)
 
 
 def skip_rts_as_needed(
@@ -100,11 +111,16 @@ def decrypt_or_dont(
     rt_file: Path,
 ):
     if expect_success:
-        decrypt_sdk.decrypt(ct_file, rt_file, container)
+        output = decrypt_sdk.decrypt(ct_file, rt_file, container)
         assert filecmp.cmp(pt_file, rt_file)
+        # Log successful output for debugging
+        if output and logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Successful decrypt output: {output.decode(errors='replace')}"
+            )
     else:
         try:
-            decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
+            output = decrypt_sdk.decrypt(ct_file, rt_file, container, expect_error=True)
             assert False, "decrypt succeeded unexpectedly"
         except subprocess.CalledProcessError as exc:
             output_content = (exc.output or b"").decode(errors="replace")
