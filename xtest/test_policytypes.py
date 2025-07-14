@@ -1,4 +1,5 @@
 import filecmp
+import logging
 import re
 import subprocess
 from pathlib import Path
@@ -9,6 +10,10 @@ import tdfs
 from abac import Attribute
 
 cipherTexts: dict[str, Path] = {}
+
+logger = logging.getLogger("xtest")
+logging.basicConfig()
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 def skip_rts_as_needed(
