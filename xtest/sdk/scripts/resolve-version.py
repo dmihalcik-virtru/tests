@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Use: python3 resolve-version.py <sdk> <tag...>
+# Use: resolve-version.py <sdk> <tag...>
 #
 #    Tag can be:
 #       main: the main branch
@@ -24,7 +24,7 @@
 #
 # Sample Input:
 #
-#    python3 resolve-version.py go 0.15.0 latest decaf01 unreleased-name
+#    resolve-version.py go 0.15.0 latest decaf01 unreleased-name
 #
 # Sample Output:
 # ```json
@@ -60,9 +60,12 @@
 # ]
 # ```
 
-import sys
+import csv
+from datetime import datetime
 import json
+import os
 import re
+import sys
 from git import Git
 from typing import NotRequired, TypeGuard, TypedDict
 from urllib.parse import quote
@@ -118,30 +121,40 @@ merge_queue_regex = r"^refs/heads/gh-readonly-queue/(?P<branch>[^/]+)/pr-(?P<pr_
 sha_regex = r"^[a-f0-9]{7,40}$"
 
 
+
 def lookup_additional_options(sdk: str, version: str) -> str | None:
     if sdk != "java":
         return None
-    if version.startswith("v"):
-        version = version[1:]
-    match version:
-        case "0.7.8" | "0.7.7":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.29"
-        case "0.7.6":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.25"
-        case "0.7.5" | "0.7.4":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.18"
-        case "0.7.3" | "0.7.2":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.17"
-        case "0.6.1" | "0.6.0":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.14"
-        case "0.5.0":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.13"
-        case "0.4.0" | "0.3.0" | "0.2.0":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.10"
-        case "0.1.0":
-            return "PLATFORM_BRANCH=protocol/go/v0.2.3"
-        case _:
-            return None
+    # Remove leading 'v' if present
+    version_stripped = version[1:] if version.startswith("v") else version
+    csv_path = os.path.join(os.path.dirname(__file__), "../version-info.csv")
+    java_tag_date = None
+    # Find the date for the java-sdk tag
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["repo"] == "java-sdk" and (row["tag-version"] == version_stripped or row["tag"] == version):
+                java_tag_date = row["date"]
+                break
+    if not java_tag_date:
+        return None
+    java_tag_dt = datetime.fromisoformat(java_tag_date.replace("Z", "+00:00"))
+    # Find the latest platform tag with 'protocol/go' prefix before java_tag_date
+    best_row = None
+    with open(csv_path, newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row["repo"] == "platform" and row["tag-prefix"] == "protocol/go":
+                try:
+                    tag_dt = datetime.fromisoformat(row["date"].replace("Z", "+00:00"))
+                except Exception:
+                    continue
+                if tag_dt < java_tag_dt:
+                    if not best_row or tag_dt > datetime.fromisoformat(best_row["date"].replace("Z", "+00:00")):
+                        best_row = row
+    if best_row:
+        return f'PLATFORM_BRANCH={best_row["tag-prefix"]}/{best_row["tag-version"]}'
+    return None
 
 
 def resolve(sdk: str, version: str, infix: None | str) -> ResolveResult:

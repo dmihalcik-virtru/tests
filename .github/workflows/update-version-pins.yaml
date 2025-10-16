@@ -1,0 +1,58 @@
+name: Update version-info.csv
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # Nightly at 3am UTC
+  workflow_dispatch:
+  repository_dispatch:
+
+jobs:
+  update-version-pins:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_KEY }}
+
+      - name: Checkout repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Update version-info.csv
+        run: |
+          git config --global user.name "opentdf-automation[bot]"
+          git config --global user.email "149537512+opentdf-automation[bot]@users.noreply.github.com"
+          xtest/sdk/scripts/update-pins.py
+          if ! git diff --quiet; then
+            git add xtest/sdk/version-info.csv
+            git commit -S -m "chore(xtest): Update version-info.csv"
+          fi
+
+      - name: Create Pull Request with gh
+        if: ${{ success() && steps.generate-token.outputs.token != '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') }}
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        run: |
+          git checkout -b update/version-info-csv || git checkout update/version-info-csv
+          git push --set-upstream origin update/version-info-csv
+          gh pr create --title "chore: update version-info.csv" --body "Automated update of version-info.csv." --base ${{ github.ref_name }} --head update/version-info-csv --label automation
+
+      - name: Sign 'Update version-info.csv' commit
+        if: ${{ success() && steps.generate-token.outputs.token != '' }}
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        uses: opentdf/platform/.github/actions/sign-github-app-commit@main
