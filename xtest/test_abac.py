@@ -288,7 +288,6 @@ def test_key_mapping_extended_rsa_mechanisms(
         ct_file = cipherTexts[sample_name]
     else:
         ct_file = tmp_dir / f"{sample_name}.tdf"
-        cipherTexts[sample_name] = ct_file
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
@@ -297,6 +296,7 @@ def test_key_mapping_extended_rsa_mechanisms(
             attr_values=rsa_vals,
             target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
+        cipherTexts[sample_name] = ct_file
 
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == len(rsa_kids)
@@ -345,7 +345,6 @@ def test_autoconfigure_one_attribute_standard(
         ct_file = cipherTexts[sample_name]
     else:
         ct_file = tmp_dir / f"{sample_name}.tdf"
-        cipherTexts[sample_name] = ct_file
         encrypt_sdk.encrypt(
             pt_file,
             ct_file,
@@ -354,6 +353,7 @@ def test_autoconfigure_one_attribute_standard(
             attr_values=attribute_single_kas_grant.value_fqns,
             target_mode=tdfs.select_target_version(encrypt_sdk, decrypt_sdk),
         )
+        cipherTexts[sample_name] = ct_file
     manifest = tdfs.manifest(ct_file)
     assert len(manifest.encryptionInformation.keyAccess) == 1
     assert manifest.encryptionInformation.keyAccess[0].url == kas_url_alpha
